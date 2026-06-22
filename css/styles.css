@@ -192,9 +192,8 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 /* =================== PAINS =================== */
 .pains{ background:linear-gradient(180deg,var(--night-2),var(--night)); }
 .pains__grid{ display:grid; grid-template-columns:repeat(4,1fr); gap:20px; }
-.pain{ padding:28px 26px; border-radius:var(--r); background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02)); border:1px solid var(--glass-line); position:relative; overflow:hidden; transition:transform .25s, border-color .25s; }
-.pain::before{ content:""; position:absolute; left:0; top:0; right:0; height:3px; background:linear-gradient(90deg,var(--warm),var(--gold-2)); opacity:.85; }
-.pain:hover{ transform:translateY(-5px); border-color:var(--line); }
+.pain{ padding:28px 26px; border-radius:var(--r); background:linear-gradient(180deg,rgba(255,255,255,.05),rgba(255,255,255,.02)); border:1px solid var(--glass-line); position:relative; overflow:hidden; transition:transform .3s, border-color .3s, box-shadow .3s; }
+.pain:hover{ transform:translateY(-5px); border-color:rgba(232,197,126,.35); }
 .pain__ic{ display:grid; place-items:center; width:50px; height:50px; border-radius:14px; background:rgba(232,197,126,.12); border:1px solid rgba(232,197,126,.3); color:var(--gold); margin-bottom:18px; }
 .pain__ic svg{ width:25px; height:25px; }
 .pain__no{ position:absolute; top:18px; right:22px; font-family:var(--display); font-weight:700; font-size:46px; color:var(--gold); opacity:.12; line-height:1; }
@@ -607,8 +606,7 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 
 
 /* акцент-полоска слева у карточек болей */
-.pain{ border-left:2px solid transparent; }
-.pain:hover{ border-left-color:var(--gold-2); }
+.pain:hover{ box-shadow:0 0 0 1px rgba(232,197,126,.3), 0 20px 46px -26px #000; }
 
 /* десктоп-таймлайн процесса: оживляем кружки */
 .step__num{ transition:transform .25s, box-shadow .25s; }
