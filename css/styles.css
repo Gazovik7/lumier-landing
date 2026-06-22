@@ -88,8 +88,17 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 .btn--gold{
   background:linear-gradient(100deg,var(--warm),var(--gold) 55%,var(--gold-2));
   color:#2A1E07; box-shadow:0 12px 30px -10px rgba(232,197,126,.55);
+  position:relative; overflow:hidden;
+}
+.btn--gold::after{
+  content:''; position:absolute; inset:0;
+  background:linear-gradient(105deg, transparent 30%, rgba(255,255,255,.38) 50%, transparent 70%);
+  transform:translateX(-120%);
+  animation:btnShimmer 2.8s ease-in-out infinite;
+  pointer-events:none;
 }
 .btn--gold:hover{ transform:translateY(-2px); box-shadow:0 18px 44px -10px rgba(232,197,126,.75); }
+.btn--gold:hover::after{ animation-play-state:paused; }
 .btn--ghost{ border:1.5px solid var(--btn-line); color:var(--cream); backdrop-filter:blur(6px); }
 .btn--ghost:hover{ border-color:var(--gold); color:var(--gold); }
 .btn--ghost-dark{ border:1.5px solid var(--btn-line-d); color:var(--ink); }
@@ -250,12 +259,14 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
   background-image:
     linear-gradient(100deg, rgba(7,20,16,.93) 0%, rgba(7,20,16,.72) 46%, rgba(7,20,16,.5) 100%),
     url('../assets/calc-bg.jpg');
-  background-size:cover; background-position:center; }
-.calc__inner{ position:relative; z-index:2; display:grid; grid-template-columns:.9fr 1.1fr; gap:48px; align-items:center; }
+  background-size:cover; background-position:center;
+  min-height:100vh; display:flex; align-items:center; }
+.calc__inner{ position:relative; z-index:2; display:grid; grid-template-columns:.9fr 1.1fr; gap:48px; align-items:center; width:100%; }
 .calc__perks{ list-style:none; margin-top:26px; display:flex; flex-direction:column; gap:12px; }
 .calc__perks li{ position:relative; padding-left:30px; color:#E4EDE7; }
 .calc__perks li::before{ content:"✦"; position:absolute; left:0; color:var(--gold); }
-.calc__card{ background:linear-gradient(180deg, rgba(16,46,36,.86), rgba(10,32,25,.9)); border:1px solid rgba(232,197,126,.32); border-radius:26px; padding:32px; box-shadow:0 30px 70px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(232,197,126,.06), 0 0 60px -20px rgba(232,197,126,.25); backdrop-filter:blur(16px); position:relative; }
+.calc__card{ background:linear-gradient(180deg, rgba(16,46,36,.86), rgba(10,32,25,.9)); border:1px solid rgba(232,197,126,.32); border-radius:26px; padding:32px; box-shadow:0 30px 70px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(232,197,126,.06), 0 0 60px -20px rgba(232,197,126,.25); backdrop-filter:blur(16px); position:relative; animation:cardPulse 3.5s ease-in-out infinite; }
+.calc__card:hover{ animation-play-state:paused; }
 .quiz__progress{ height:5px; border-radius:999px; background:rgba(255,255,255,.08); overflow:hidden; margin-bottom:26px; }
 .quiz__bar{ display:block; height:100%; width:20%; border-radius:999px; background:linear-gradient(90deg,var(--warm),var(--gold-2)); transition:width .4s; }
 .quiz__step{ border:none; display:none; animation:fade .35s ease; }
@@ -574,6 +585,9 @@ html.js .reveal.is-in{ opacity:1; transform:none; }
 @keyframes shake{ 0%,100%{ transform:translateX(0); } 25%{ transform:translateX(-7px); } 75%{ transform:translateX(7px); } }
 .quiz__step.shake{ animation:shake .35s; }
 @keyframes flashGlow{ 0%,100%{ box-shadow:var(--shadow); } 50%{ box-shadow:0 0 0 3px rgba(232,197,126,.5), var(--glow); } }
+@keyframes cardPulse{ 0%,100%{ box-shadow:0 30px 70px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(232,197,126,.06), 0 0 60px -20px rgba(232,197,126,.25); } 50%{ box-shadow:0 30px 70px -28px rgba(0,0,0,.7), 0 0 0 1px rgba(232,197,126,.38), 0 0 90px -10px rgba(232,197,126,.48); } }
+@keyframes btnShimmer{ 0%,35%{ transform:translateX(-120%); } 65%,100%{ transform:translateX(220%); } }
+@media(prefers-reduced-motion:reduce){ .calc__card,.btn--gold::after{ animation:none; } }
 .calc__card.flash{ animation:flashGlow 1s ease 2; }
 @media (prefers-reduced-motion:reduce){ *{ animation:none !important; transition:none !important; } .reveal{ opacity:1; transform:none; } }
 

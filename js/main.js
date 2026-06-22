@@ -267,8 +267,6 @@
     form: $("#quizForm"),
     steps: $$(".quiz__step"),
     bar: $("#quizBar"),
-    back: $("#quizBack"),
-    next: $("#quizNext"),
     submit: $("#quizSubmit"),
     hint: $("#quizStepHint"),
     result: $("#quizResult"),
@@ -281,9 +279,7 @@
     quiz.steps.forEach((s, idx) => s.classList.toggle("is-active", idx === i));
     quiz.bar.style.width = ((i + 1) / quiz.steps.length) * 100 + "%";
     quiz.hint.textContent = `Шаг ${i + 1} из ${quiz.steps.length}`;
-    quiz.back.hidden = i === 0;
     const last = i === quiz.steps.length - 1;
-    quiz.next.hidden = last;
     quiz.submit.hidden = !last;
     if (last) calcPrice();
   }
@@ -323,23 +319,12 @@
   }
 
   if (quiz.form) {
-    quiz.next.addEventListener("click", () => {
-      if (!stepValid(quiz.cur)) {
-        quiz.steps[quiz.cur].classList.add("shake");
-        setTimeout(() => quiz.steps[quiz.cur].classList.remove("shake"), 400);
-        return;
-      }
-      if (quiz.cur < quiz.steps.length - 1) showStep(++quiz.cur);
-    });
-    quiz.back.addEventListener("click", () => {
-      if (quiz.cur > 0) showStep(--quiz.cur);
-    });
-    // авто-переход после выбора (кроме последнего шага)
+    // авто-переход после выбора радио (кроме последнего шага)
     quiz.form.addEventListener("change", (e) => {
       if (e.target.type === "radio" && quiz.cur < quiz.steps.length - 1) {
         setTimeout(() => {
           if (stepValid(quiz.cur)) showStep(++quiz.cur);
-        }, 250);
+        }, 260);
       }
     });
     quiz.form.addEventListener("submit", (e) => {
