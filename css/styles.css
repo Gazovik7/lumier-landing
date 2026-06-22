@@ -351,7 +351,7 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 .case figcaption span{ font-size:12.5px; color:var(--muted); }
 
 /* --- Rich case cards --- */
-.cases__grid{ display:flex; flex-direction:column; gap:2px; margin-top:40px; border-radius:var(--r); overflow:hidden; }
+.cases__grid{ display:flex; flex-direction:column; gap:28px; margin-top:40px; }
 .case-card{ display:grid; grid-template-columns:1.1fr .9fr; background:linear-gradient(135deg,rgba(16,46,36,.96),rgba(10,31,26,.98)); border:1px solid rgba(232,197,126,.14); border-radius:var(--r); overflow:hidden; gap:0; transition:border-color .3s; }
 .case-card:hover{ border-color:rgba(232,197,126,.36); }
 .case-card--rev{ grid-template-columns:.9fr 1.1fr; }
