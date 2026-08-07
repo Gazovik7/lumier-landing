@@ -1,6 +1,39 @@
 /* ===================================================================
    Lumiér — интерактив лендинга
    =================================================================== */
+
+/* ===================================================================
+   НАСТРОЙКА ОТПРАВКИ ЗАЯВОК  ←  заполнить перед публикацией
+   -------------------------------------------------------------------
+   Сайт статический (GitHub Pages), своего бэкенда нет. Заявка уходит
+   параллельно во все каналы, у которых заполнены поля ниже. Пустой
+   канал просто пропускается, форма продолжает работать.
+
+   1) EMAIL — письмо на girlandahous@yandex.ru.
+      Вариант А (без регистрации, FormSubmit):
+        endpoint: "https://formsubmit.co/ajax/girlandahous@yandex.ru"
+        Первую заявку сервис попросит подтвердить письмом на этот ящик.
+      Вариант Б (Formspree/Getform): вставить выданный ими AJAX-URL.
+
+   2) TELEGRAM — дублирование в бота, в отдельный чат.
+      token  — токен бота от @BotFather
+      chatId — id чата/группы, куда слать (узнать через @userinfobot,
+               бота надо добавить в этот чат)
+      ВНИМАНИЕ: на статическом сайте токен виден в исходниках страницы —
+      любой может слать сообщения в этот чат. Заводите ОТДЕЛЬНОГО бота
+      только под заявки и не используйте его больше нигде. Если такой
+      риск не подходит — оставьте telegram пустым и укажите webhook
+      (Cloudflare Worker / n8n / Make), который спрячет токен на сервере.
+
+   3) WEBHOOK — любой свой обработчик. Получает JSON вида
+      { source, name, phone, ... , page, ts }.
+   =================================================================== */
+var LEAD_CONFIG = {
+  email:    { endpoint: "" },              // напр. "https://formsubmit.co/ajax/girlandahous@yandex.ru"
+  telegram: { token: "", chatId: "" },     // напр. { token: "123456:AA...", chatId: "-1001234567890" }
+  webhook:  ""                             // напр. "https://lumier-leads.workers.dev/lead"
+};
+
 (function () {
   "use strict";
   const $  = (s, c = document) => c.querySelector(s);
@@ -236,8 +269,106 @@
     }
   });
 
-  /* ---------- общая отправка форм (заглушка) ---------- */
-  function handleLead(form) {
+  /* ====================================================
+     ОТПРАВКА ЗАЯВОК — почта + Telegram + вебхук
+     Настройки — в LEAD_CONFIG наверху файла.
+     ==================================================== */
+  const CFG = window.LEAD_CONFIG || {};
+
+  // человекочитаемые подписи полей для письма и сообщения в Telegram
+  const FIELD_LABELS = {
+    source: "Форма",
+    name: "Имя",
+    phone: "Телефон",
+    object: "Что украшаем",
+    meters: "Метраж по контуру",
+    floors: "Этажность",
+    when: "Сроки монтажа",
+    estimate: "Расчёт на сайте",
+    page: "Страница",
+  };
+  const FIELD_ORDER = Object.keys(FIELD_LABELS);
+
+  function collectLead(form, source, extra) {
+    const data = { source: source };
+    new FormData(form).forEach((v, k) => {
+      if (k === "agree" || !String(v).trim()) return;
+      data[k] = String(v).trim();
+    });
+    Object.assign(data, extra || {});
+    data.page = location.href;
+    data.ts = new Date().toISOString();
+    return data;
+  }
+
+  function leadToText(data) {
+    const seen = new Set(FIELD_ORDER);
+    const lines = FIELD_ORDER.filter((k) => data[k]).map(
+      (k) => FIELD_LABELS[k] + ": " + data[k]
+    );
+    Object.keys(data).forEach((k) => {
+      if (!seen.has(k) && k !== "ts" && data[k]) lines.push(k + ": " + data[k]);
+    });
+    return "🎄 Новая заявка с сайта\n\n" + lines.join("\n");
+  }
+
+  function sendEmail(data) {
+    const url = (CFG.email && CFG.email.endpoint) || "";
+    if (!url) return null;
+    const body = { _subject: "Заявка с сайта: " + (data.phone || data.source) };
+    Object.keys(data).forEach((k) => {
+      body[FIELD_LABELS[k] || k] = data[k];
+    });
+    return fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify(body),
+    });
+  }
+
+  function sendTelegram(data) {
+    const tg = CFG.telegram || {};
+    if (!tg.token || !tg.chatId) return null;
+    return fetch("https://api.telegram.org/bot" + tg.token + "/sendMessage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: tg.chatId,
+        text: leadToText(data),
+        disable_web_page_preview: true,
+      }),
+    });
+  }
+
+  function sendWebhook(data) {
+    if (!CFG.webhook) return null;
+    return fetch(CFG.webhook, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+  }
+
+  // Отправляем во все настроенные каналы разом. Пользователю показываем успех
+  // сразу — заявка не должна «зависать» из-за медленного стороннего сервиса,
+  // а ошибки пишем в консоль, чтобы их было видно при отладке.
+  function sendLead(data) {
+    const jobs = [sendEmail(data), sendTelegram(data), sendWebhook(data)].filter(Boolean);
+    if (!jobs.length) {
+      console.warn("LEAD (каналы отправки не настроены, см. LEAD_CONFIG в js/main.js):", data);
+      return Promise.resolve();
+    }
+    return Promise.allSettled(jobs).then((res) => {
+      res.forEach((r) => {
+        if (r.status === "rejected") console.error("Не удалось отправить заявку:", r.reason);
+        else if (r.value && !r.value.ok)
+          console.error("Канал отправки вернул ошибку:", r.value.status, r.value.url);
+      });
+    });
+  }
+
+  /* ---------- общие формы (попап + блок «Оставить заявку») ---------- */
+  function handleLead(form, source) {
     form.addEventListener("submit", (e) => {
       e.preventDefault();
       const phone = form.querySelector('input[type="tel"]');
@@ -251,14 +382,17 @@
         agree.closest(".agree").classList.add("is-error");
         return;
       }
-      // здесь должна быть реальная отправка (fetch на бэкенд/CRM/Telegram)
-      console.log("LEAD:", Object.fromEntries(new FormData(form)));
+      sendLead(collectLead(form, source));
       form.reset();
       if (!modal.hidden) closeModal();
       showToast();
     });
   }
-  ["#modalForm", "#leadForm"].forEach((s) => $(s) && handleLead($(s)));
+  const LEAD_FORMS = {
+    "#modalForm": "Попап «Рассчитать»",
+    "#leadForm": "Блок «Оставить заявку»",
+  };
+  Object.keys(LEAD_FORMS).forEach((s) => $(s) && handleLead($(s), LEAD_FORMS[s]));
 
   /* ====================================================
      КВИЗ-КАЛЬКУЛЯТОР
@@ -340,7 +474,11 @@
         agree.closest(".agree").classList.add("is-error");
         return;
       }
-      console.log("QUIZ LEAD:", Object.fromEntries(new FormData(quiz.form)));
+      sendLead(
+        collectLead(quiz.form, "Квиз-калькулятор", {
+          estimate: quiz.sum ? quiz.sum.textContent : "",
+        })
+      );
       showToast();
       quiz.form.reset();
       quiz.cur = 0;
@@ -424,23 +562,85 @@
      ==================================================== */
   const lightbox = $("#lightbox");
   const lightboxImg = $("#lightboxImg");
+  const lbPrev = $("#lightboxPrev");
+  const lbNext = $("#lightboxNext");
+  const lbCount = $("#lightboxCount");
+
+  // текущая «плёнка»: массив {src, alt} + позиция. Для одиночных фото длина = 1.
+  let lbShots = [];
+  let lbIdx = 0;
+
+  function renderLightbox() {
+    const shot = lbShots[lbIdx];
+    if (!shot) return;
+    lightboxImg.src = shot.src;
+    lightboxImg.alt = shot.alt || "";
+    const many = lbShots.length > 1;
+    lbPrev.hidden = lbNext.hidden = lbCount.hidden = !many;
+    if (many) lbCount.textContent = `${lbIdx + 1} / ${lbShots.length}`;
+  }
+  function openLightbox(shots, idx) {
+    lbShots = shots;
+    lbIdx = idx || 0;
+    renderLightbox();
+    lightbox.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+  function stepLightbox(dir) {
+    lbIdx = (lbIdx + dir + lbShots.length) % lbShots.length;
+    renderLightbox();
+  }
   function closeLightbox() {
     lightbox.hidden = true;
     document.body.style.overflow = "";
   }
+
+  // одиночные фото (лента соцсетей)
   $$(".js-lightbox").forEach((fig) =>
-    fig.addEventListener("click", () => {
+    fig.addEventListener("click", (e) => {
+      e.preventDefault();
       const img = fig.querySelector("img");
-      lightboxImg.src = img.src;
-      lightboxImg.alt = img.alt;
-      lightbox.hidden = false;
-      document.body.style.overflow = "hidden";
+      openLightbox([{ src: img.src, alt: img.alt }], 0);
     })
   );
+
+  /* ---------- галереи проектов в кейсах ---------- */
+  $$(".js-gal").forEach((gal) => {
+    const main = $(".js-gal-main", gal);
+    const thumbs = $$(".cthumb", gal);
+    if (!main || !thumbs.length) return;
+    const shots = thumbs.map((t) => ({ src: t.dataset.src, alt: t.dataset.alt || "" }));
+    let cur = 0;
+
+    const select = (i) => {
+      cur = i;
+      main.src = shots[i].src;
+      main.alt = shots[i].alt;
+      thumbs.forEach((t, n) => t.classList.toggle("is-active", n === i));
+    };
+    thumbs.forEach((t, i) =>
+      t.addEventListener("click", (e) => {
+        e.preventDefault();
+        select(i);
+      })
+    );
+    // клик по большому фото или по лупе — полноэкранный просмотр с текущего кадра
+    main.addEventListener("click", () => openLightbox(shots, cur));
+    const zoom = $(".js-gal-zoom", gal);
+    if (zoom) zoom.addEventListener("click", () => openLightbox(shots, cur));
+  });
+
   if (lightbox) {
     $(".lightbox__close").addEventListener("click", closeLightbox);
+    lbPrev.addEventListener("click", () => stepLightbox(-1));
+    lbNext.addEventListener("click", () => stepLightbox(1));
     lightbox.addEventListener("click", (e) => {
       if (e.target === lightbox) closeLightbox();
+    });
+    document.addEventListener("keydown", (e) => {
+      if (lightbox.hidden || lbShots.length < 2) return;
+      if (e.key === "ArrowLeft") stepLightbox(-1);
+      if (e.key === "ArrowRight") stepLightbox(1);
     });
   }
 
