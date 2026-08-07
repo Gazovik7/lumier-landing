@@ -29,7 +29,8 @@
       { source, name, phone, ... , page, ts }.
    =================================================================== */
 var LEAD_CONFIG = {
-  email:    { endpoint: "" },              // напр. "https://formsubmit.co/ajax/girlandahous@yandex.ru"
+  // Почта подключена: заявки уходят на girlandahous@yandex.ru через FormSubmit.
+  email:    { endpoint: "https://formsubmit.co/ajax/girlandahous@yandex.ru" },
   telegram: { token: "", chatId: "" },     // напр. { token: "123456:AA...", chatId: "-1001234567890" }
   webhook:  ""                             // напр. "https://lumier-leads.workers.dev/lead"
 };
@@ -315,7 +316,11 @@ var LEAD_CONFIG = {
   function sendEmail(data) {
     const url = (CFG.email && CFG.email.endpoint) || "";
     if (!url) return null;
-    const body = { _subject: "Заявка с сайта: " + (data.phone || data.source) };
+    const body = {
+      _subject: "Заявка с сайта: " + (data.phone || data.source),
+      _template: "table",   // письмо таблицей, а не сплошным текстом
+      _captcha: "false",    // без промежуточной страницы с капчей
+    };
     Object.keys(data).forEach((k) => {
       body[FIELD_LABELS[k] || k] = data[k];
     });
