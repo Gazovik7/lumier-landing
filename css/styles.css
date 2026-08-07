@@ -50,6 +50,10 @@ body{
 }
 img{ max-width:100%; display:block; }
 a{ color:inherit; text-decoration:none; }
+/* длинные слова («рассчитывается», «Рублёво-Успенское») на узких экранах
+   не должны распирать блок — переносим их, при возможности по слогам */
+h1,h2,h3,h4,p,li,a,b,span,summary,figcaption,legend{ overflow-wrap:break-word; }
+.section__title,.section__sub{ hyphens:auto; }
 button{ font-family:inherit; cursor:pointer; border:none; background:none; color:inherit; }
 .container{ width:100%; max-width:var(--maxw); margin:0 auto; padding:0 24px; }
 
@@ -179,7 +183,9 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 /* бегущая лента посёлков */
 .trust__marquee{ display:flex; align-items:center; gap:24px; padding:22px 0 8px; margin-top:24px; border-top:1px solid var(--line); }
 .trust__mlabel{ flex:none; padding-left:24px; font-size:12px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--gold-2); }
-.trust__viewport{ position:relative; overflow:hidden; flex:1;
+/* min-width:0 обязателен: без него flex-элемент не даёт себя сжать до ширины
+   родителя и бегущая строка растягивает страницу по длине текста */
+.trust__viewport{ position:relative; overflow:hidden; flex:1; min-width:0; max-width:100%;
   -webkit-mask:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent);
   mask:linear-gradient(90deg, transparent, #000 6%, #000 94%, transparent); }
 .trust__track{ display:inline-flex; align-items:center; gap:0; white-space:nowrap; animation:marquee 38s linear infinite; }
@@ -519,9 +525,11 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 .review footer span{ font-size:13px; color:var(--muted); }
 .reviews__nav{ display:flex; justify-content:center; gap:14px; margin-top:30px; }
 .reviews__btn{ width:50px; height:50px; border-radius:50%; border:1.5px solid var(--btn-line); color:var(--gold); font-size:22px; transition:.2s; }
-.reviews__dots{ display:flex; justify-content:center; gap:9px; margin-top:18px; }
-.reviews__dots button{ width:9px; height:9px; border-radius:50%; background:var(--btn-line); transition:.2s; }
-.reviews__dots button.is-active{ background:var(--gold); transform:scale(1.25); }
+/* кружок остаётся 9px, но кнопка — 30px, чтобы в неё можно было попасть пальцем */
+.reviews__dots{ display:flex; justify-content:center; gap:0; margin-top:12px; }
+.reviews__dots button{ width:30px; height:30px; display:grid; place-items:center; background:none; }
+.reviews__dots button::before{ content:""; width:9px; height:9px; border-radius:50%; background:var(--btn-line); transition:.2s; }
+.reviews__dots button.is-active::before{ background:var(--gold); transform:scale(1.25); }
 .reviews__btn:hover{ background:var(--gold); color:#2A1E07; border-color:var(--gold); }
 
 /* =================== FAQ =================== */
@@ -565,7 +573,7 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 .footer__col a.footer__phone{ font-weight:800; font-size:18px; color:var(--cream); }
 .footer__small{ font-size:12.5px; color:var(--muted); margin:12px 0 16px; }
 .footer__bottom{ display:flex; justify-content:space-between; gap:16px; flex-wrap:wrap; margin-top:42px; padding-top:24px; border-top:1px solid var(--line); font-size:13px; color:var(--muted); }
-.footer__bottom a{ color:var(--muted); text-decoration:underline; }
+.footer__bottom a{ color:var(--muted); text-decoration:underline; display:inline-block; padding:6px 0; }
 
 /* =================== MOBILE BAR =================== */
 .mobilebar{ position:fixed; left:0; right:0; bottom:0; z-index:55; display:none; gap:10px; padding:10px 14px calc(10px + env(safe-area-inset-bottom)); background:rgba(8,24,20,.92); backdrop-filter:blur(12px); border-top:1px solid var(--line); }
@@ -700,7 +708,12 @@ html.js .reveal.is-in{ opacity:1; transform:none; }
   .b2b__stats{ max-width:520px; }
   .pains__grid{ grid-template-columns:1fr 1fr; }
   .services__bento{ grid-template-columns:1fr 1fr; grid-auto-rows:220px; grid-template-areas:none; }
-  .services__bento > .svc{ grid-area:auto; }
+  /* сбрасываем именованные области ТЕМИ ЖЕ селекторами: правило
+     `.services__bento > .svc` слабее, чем `... > .svc:nth-child(2)`,
+     и без этого карточки 2–4 схлопывались в нулевую ширину */
+  .services__bento > .svc:nth-child(2),
+  .services__bento > .svc:nth-child(3),
+  .services__bento > .svc:nth-child(4){ grid-area:auto; }
   .svc--lg{ grid-area:auto; grid-row:span 1; } .svc--wide{ grid-area:auto; grid-column:span 2; }
   .prices__grid,.usp__grid,.cases__grid,.video__grid{ grid-template-columns:1fr 1fr; }
   .team__grid{ grid-template-columns:1fr 1fr; }
@@ -731,6 +744,8 @@ html.js .reveal.is-in{ opacity:1; transform:none; }
   .case-card, .case-card--rev{ grid-template-columns:1fr; }
   .case-card--rev .case-card__photo{ order:0; }
   .case-card--rev .case-card__info{ order:1; }
+  /* ссылки в футере — по 14px текста и 10px отступа мало для пальца */
+  .footer__col a{ padding:8px 0; margin-bottom:0; }
   .case-card__photo{ min-height:240px; }
   .case-card__photo.js-gal{ min-height:300px; }  /* запас под полосу миниатюр */
   .case-card__zoom{ opacity:1; transform:none; }  /* на тач-устройствах нет :hover */
@@ -738,13 +753,19 @@ html.js .reveal.is-in{ opacity:1; transform:none; }
   .segs__grid{ grid-template-columns:1fr; }
   .trust__stats{ grid-template-columns:1fr 1fr; gap:30px 18px; }
   .trust__stats li:not(:last-child)::after{ display:none; }
-  .trust__marquee{ flex-direction:column; align-items:flex-start; gap:14px; }
+  /* в колонке flex:1 больше не ограничивает ширину — тянем по родителю явно */
+  .trust__marquee{ flex-direction:column; align-items:stretch; gap:14px; }
   .trust__mlabel{ padding-left:18px; }
+  .trust__viewport{ width:100%; }
   .safety__visual img{ aspect-ratio:4/3; }   /* портрет слишком высокий на мобайле */
 }
 @media (max-width:560px){
   .pains__grid,.services__bento,.prices__grid,.usp__grid,.cases__grid,.video__grid,.team__grid,.lights__grid,.creds__grid,.safety__cards{ grid-template-columns:1fr; }
   .social__grid{ grid-template-columns:repeat(2,1fr); }
+  /* высоту карточки услуги задаёт текст, а не фиксированная строка сетки:
+     иначе длинное описание вылезает вверх и наезжает на плашку с ценой */
+  .services__bento{ grid-auto-rows:auto; }
+  .svc__body{ position:relative; min-height:240px; padding-top:62px; }
   .ba__pair{ grid-template-columns:1fr; }
   .safety__banner figcaption{ background:linear-gradient(180deg, rgba(6,18,14,.5), rgba(6,18,14,.92)); padding:0 24px; }
   .b2b__stats{ grid-template-columns:1fr 1fr; }
