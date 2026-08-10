@@ -31,7 +31,9 @@
 var LEAD_CONFIG = {
   // Почта подключена: заявки уходят на girlandahous@yandex.ru через FormSubmit.
   email:    { endpoint: "https://formsubmit.co/ajax/girlandahous@yandex.ru" },
-  telegram: { token: "", chatId: "" },     // напр. { token: "123456:AA...", chatId: "-1001234567890" }
+  // Бот @veshaemgirlyandirubot. Токен подставим вместе с chatId, когда будет
+  // создан отдельный чат под заявки — по отдельности они бесполезны.
+  telegram: { token: "", chatId: "" },
   webhook:  ""                             // напр. "https://lumier-leads.workers.dev/lead"
 };
 
@@ -600,12 +602,14 @@ var LEAD_CONFIG = {
     document.body.style.overflow = "";
   }
 
-  // одиночные фото (лента соцсетей)
+  // одиночные фото (лента соцсетей, пара «днём / вечером»).
+  // data-full — полноразмерный кадр: в сетке лежит версия под мелкий слот,
+  // её нельзя растягивать на весь экран
   $$(".js-lightbox").forEach((fig) =>
     fig.addEventListener("click", (e) => {
       e.preventDefault();
       const img = fig.querySelector("img");
-      openLightbox([{ src: img.src, alt: img.alt }], 0);
+      openLightbox([{ src: fig.dataset.full || img.currentSrc || img.src, alt: img.alt }], 0);
     })
   );
 
@@ -614,14 +618,23 @@ var LEAD_CONFIG = {
     const main = $(".js-gal-main", gal);
     const thumbs = $$(".cthumb", gal);
     if (!main || !thumbs.length) return;
-    const shots = thumbs.map((t) => ({ src: t.dataset.src, alt: t.dataset.alt || "" }));
+    // в лайтбокс отдаём полноразмерный кадр (data-full), в карточку — версию
+    // под её слот (data-src + data-mainset)
+    const shots = thumbs.map((t) => ({
+      src: t.dataset.full || t.dataset.src,
+      alt: t.dataset.alt || "",
+    }));
     let cur = 0;
 
     const select = (i) => {
       cur = i;
-      main.src = shots[i].src;
+      const t = thumbs[i];
+      // srcset надо менять вместе с src, иначе браузер продолжит показывать
+      // прежнюю картинку из старого набора
+      main.srcset = t.dataset.mainset || "";
+      main.src = t.dataset.src;
       main.alt = shots[i].alt;
-      thumbs.forEach((t, n) => t.classList.toggle("is-active", n === i));
+      thumbs.forEach((el, n) => el.classList.toggle("is-active", n === i));
     };
     thumbs.forEach((t, i) =>
       t.addEventListener("click", (e) => {

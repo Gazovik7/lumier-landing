@@ -263,9 +263,15 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 .calc{ position:relative; overflow:hidden; background:var(--night);
   background-image:
     linear-gradient(100deg, rgba(7,20,16,.93) 0%, rgba(7,20,16,.72) 46%, rgba(7,20,16,.5) 100%),
-    url('../assets/calc-bg.jpg');
+    url('../assets/calc-bg-1440.webp');
   background-size:cover; background-position:center;
   min-height:100vh; display:flex; align-items:center; }
+/* на телефонах хватает узкой версии — 44 КБ вместо 129 */
+@media (max-width:768px){
+  .calc{ background-image:
+    linear-gradient(100deg, rgba(7,20,16,.93) 0%, rgba(7,20,16,.72) 46%, rgba(7,20,16,.5) 100%),
+    url('../assets/calc-bg-780.webp'); }
+}
 .calc__inner{ position:relative; z-index:2; display:grid; grid-template-columns:.9fr 1.1fr; gap:48px; align-items:center; width:100%; }
 .calc__perks{ list-style:none; margin-top:26px; display:flex; flex-direction:column; gap:12px; }
 .calc__perks li{ position:relative; padding-left:30px; color:#E4EDE7; }
