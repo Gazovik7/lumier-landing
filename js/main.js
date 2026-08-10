@@ -9,11 +9,11 @@
    параллельно во все каналы, у которых заполнены поля ниже. Пустой
    канал просто пропускается, форма продолжает работать.
 
-   1) EMAIL — письмо на girlandahous@yandex.ru.
-      Вариант А (без регистрации, FormSubmit):
-        endpoint: "https://formsubmit.co/ajax/girlandahous@yandex.ru"
-        Первую заявку сервис попросит подтвердить письмом на этот ящик.
-      Вариант Б (Formspree/Getform): вставить выданный ими AJAX-URL.
+   1) EMAIL — список адресов, заявка уходит на каждый независимо.
+      Через FormSubmit регистрация не нужна, но КАЖДЫЙ адрес надо один раз
+      подтвердить: сервис присылает на него письмо со ссылкой «Activate Form».
+      Пока адрес не подтверждён, письма на него не доставляются, при этом
+      остальные адреса работают как обычно.
 
    2) TELEGRAM — дублирование в бота, в отдельный чат.
       token  — токен бота от @BotFather
@@ -29,8 +29,15 @@
       { source, name, phone, ... , page, ts }.
    =================================================================== */
 var LEAD_CONFIG = {
-  // Почта подключена: заявки уходят на girlandahous@yandex.ru через FormSubmit.
-  email:    { endpoint: "https://formsubmit.co/ajax/girlandahous@yandex.ru" },
+  email: {
+    endpoints: [
+      // боевой ящик клиента — АДРЕС ЕЩЁ НЕ ПОДТВЕРЖДЁН, письма на него пока
+      // не доставляются; нужно нажать «Activate Form» в письме от FormSubmit
+      "https://formsubmit.co/ajax/girlandahous@yandex.ru",
+      // рабочая копия — подтверждён, заявки приходят
+      "https://formsubmit.co/ajax/gazovik7@gmail.com",
+    ],
+  },
   // Бот @veshaemgirlyandirubot. Токен подставим вместе с chatId, когда будет
   // создан отдельный чат под заявки — по отдельности они бесполезны.
   telegram: { token: "", chatId: "" },
@@ -315,9 +322,12 @@ var LEAD_CONFIG = {
     return "🎄 Новая заявка с сайта\n\n" + lines.join("\n");
   }
 
+  // Возвращает по запросу на каждый адрес: неподтверждённый ящик не должен
+  // мешать остальным — каждый уходит независимо.
   function sendEmail(data) {
-    const url = (CFG.email && CFG.email.endpoint) || "";
-    if (!url) return null;
+    const cfg = CFG.email || {};
+    const urls = cfg.endpoints || (cfg.endpoint ? [cfg.endpoint] : []);
+    if (!urls.length) return [];
     const body = {
       _subject: "Заявка с сайта: " + (data.phone || data.source),
       _template: "table",   // письмо таблицей, а не сплошным текстом
@@ -326,11 +336,24 @@ var LEAD_CONFIG = {
     Object.keys(data).forEach((k) => {
       body[FIELD_LABELS[k] || k] = data[k];
     });
-    return fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Accept: "application/json" },
-      body: JSON.stringify(body),
-    });
+    return urls.map((url) =>
+      fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify(body),
+      }).then((r) => {
+        // FormSubmit отвечает 200 даже когда письмо не ушло (например, адрес
+        // не подтверждён) — реальный итог лежит в теле ответа
+        r.clone().json().then(
+          (j) => {
+            if (String(j.success) !== "true")
+              console.error("Письмо не доставлено:", url, "—", j.message);
+          },
+          () => {}
+        );
+        return r;
+      })
+    );
   }
 
   function sendTelegram(data) {
@@ -360,7 +383,7 @@ var LEAD_CONFIG = {
   // сразу — заявка не должна «зависать» из-за медленного стороннего сервиса,
   // а ошибки пишем в консоль, чтобы их было видно при отладке.
   function sendLead(data) {
-    const jobs = [sendEmail(data), sendTelegram(data), sendWebhook(data)].filter(Boolean);
+    const jobs = [...sendEmail(data), sendTelegram(data), sendWebhook(data)].filter(Boolean);
     if (!jobs.length) {
       console.warn("LEAD (каналы отправки не настроены, см. LEAD_CONFIG в js/main.js):", data);
       return Promise.resolve();
