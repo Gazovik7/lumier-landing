@@ -1,0 +1,57 @@
+# Публикация сайта на GitHub Pages с подстановкой токена бота.
+#
+# Зачем сборка вообще нужна: сайт статический, но токен Telegram-бота не должен
+# лежать в репозитории — публичные репозитории обходят сканеры, которые ищут
+# именно такие токены. Поэтому токен хранится в секрете репозитория
+# (Settings → Secrets and variables → Actions → TG_BOT_TOKEN) и подставляется
+# в js/lead-secrets.js уже здесь, при публикации.
+#
+# ВАЖНО, единожды: Settings → Pages → Source переключить на «GitHub Actions».
+# Пока там стоит «Deploy from a branch», этот workflow не публикует сайт,
+# и Pages отдаёт файлы прямо из ветки — то есть с пустым токеном.
+
+name: Публикация сайта
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:   # кнопка «Run workflow» для ручного перезапуска
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Две одновременные публикации мешают друг другу: оставляем последнюю.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Подставить токен бота
+        env:
+          TG_BOT_TOKEN: ${{ secrets.TG_BOT_TOKEN }}
+        run: |
+          if [ -z "$TG_BOT_TOKEN" ]; then
+            echo "::warning::Секрет TG_BOT_TOKEN не задан — заявки в Telegram уходить не будут, только на почту"
+          fi
+          # перезаписываем файл-заглушку из репозитория; токен приходит
+          # аргументом, в лог не попадает
+          printf 'window.LEAD_TOKEN = "%s";\n' "$TG_BOT_TOKEN" > js/lead-secrets.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - id: deploy
+        uses: actions/deploy-pages@v4

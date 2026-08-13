@@ -1,0 +1,17 @@
+# Конфиг ЗАПАСНОГО варианта прокси, на Cloudflare. Основной — Yandex Cloud
+# Functions (yandex-function.js), потому что *.workers.dev в России часто
+# заблокирован; этот конфиг для него не нужен.
+#
+# Секретов здесь НЕТ и быть не должно: BOT_TOKEN и CHAT_ID задаются через
+# `wrangler secret put` и хранятся зашифрованными на стороне Cloudflare.
+# Всё, что попадёт в этот файл, уедет в git.
+
+name = "lumier-leads"
+main = "cloudflare-worker.js"
+compatibility_date = "2026-08-01"
+
+# Ограничение частоты заявок с одного IP. Необязательно: пока привязки нет,
+# воркер работает без лимита. Как включить — в README.md, раздел «Лимит частоты».
+# [[kv_namespaces]]
+# binding = "RL"
+# id = "сюда id namespace из вывода `wrangler kv namespace create RL`"

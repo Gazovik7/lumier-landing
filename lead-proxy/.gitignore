@@ -1,0 +1,5 @@
+# локальные секреты для `wrangler dev` — в репозиторий не должны попадать
+.dev.vars
+# служебное
+.wrangler/
+node_modules/
