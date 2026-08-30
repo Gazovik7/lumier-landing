@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Заявка принята — Lumiér</title>
+<meta name="description" content="Заявка на украшение дома гирляндами принята. Дизайнер Lumiér перезвонит в ближайшее время.">
+
+<!-- Служебная страница: в поиске ей делать нечего, иначе она попадёт в выдачу
+     вместо главной и испортит статистику целей случайными заходами. -->
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#0A1F1A">
+
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/manrope-400-cyrillic.woff2" crossorigin>
+<link rel="preload" as="font" type="font/woff2" href="assets/fonts/unbounded-600-cyrillic.woff2" crossorigin>
+<link rel="stylesheet" href="assets/fonts/fonts.css">
+<link rel="icon" type="image/svg+xml" href="assets/logo/logo-mark.svg">
+<!-- нужен ради дизайн-токенов (:root) и классов .btn — своя вёрстка ниже -->
+<link rel="stylesheet" href="css/styles.css">
+
+<!-- ============ АНАЛИТИКА ============
+     Счётчик здесь обязателен: цель «заявка» в Метрике считается по просмотру
+     именно этой страницы. Уберёте счётчик — цель перестанет срабатывать. -->
+<!-- Yandex.Metrika counter -->
+<script type="text/javascript">
+    (function(m,e,t,r,i,k,a){
+        m[i]=m[i]||function(){(m[i].a=m[i].a||[]).push(arguments)};
+        m[i].l=1*new Date();
+        for (var j = 0; j < document.scripts.length; j++) {if (document.scripts[j].src === r) { return; }}
+        k=e.createElement(t),a=e.getElementsByTagName(t)[0],k.async=1,k.src=r,a.parentNode.insertBefore(k,a)
+    })(window, document,'script','https://mc.yandex.ru/metrika/tag.js?id=112009045', 'ym');
+
+    ym(112009045, 'init', {ssr:true, webvisor:true, clickmap:true, ecommerce:"dataLayer", referrer: document.referrer, url: location.href, accurateTrackBounce:true, trackLinks:true});
+</script>
+<noscript><div><img src="https://mc.yandex.ru/watch/112009045" style="position:absolute; left:-9999px;" alt="" /></div></noscript>
+<!-- /Yandex.Metrika counter -->
+
+<style>
+  body{
+    min-height:100vh;
+    display:flex; align-items:center; justify-content:center;
+    padding:32px 20px;
+    background:
+      radial-gradient(900px 520px at 50% -10%, rgba(232,197,126,.16), transparent 62%),
+      var(--night);
+    color:var(--cream);
+    font-family:var(--font);
+    line-height:1.6;
+  }
+
+  .ty{ width:100%; max-width:620px; text-align:center; }
+
+  .ty__logo{
+    display:inline-block; margin-bottom:34px;
+    font-family:var(--display); font-weight:600; font-size:21px; letter-spacing:.02em;
+    color:var(--gold); text-decoration:none;
+  }
+
+  .ty__mark{
+    width:84px; height:84px; margin:0 auto 26px;
+    display:grid; place-items:center;
+    border-radius:50%;
+    background:rgba(232,197,126,.10);
+    border:1.5px solid rgba(232,197,126,.42);
+    box-shadow:var(--glow);
+  }
+  .ty__mark svg{ display:block; }
+
+  .ty__title{
+    font-family:var(--display); font-weight:600;
+    font-size:clamp(28px, 5.2vw, 40px); line-height:1.18;
+    margin-bottom:16px;
+  }
+
+  .ty__lead{ font-size:17px; color:var(--muted); margin-bottom:34px; }
+  .ty__lead b{ color:var(--cream); font-weight:600; }
+
+  .ty__next{
+    text-align:left; list-style:none;
+    display:grid; gap:14px;
+    padding:26px 28px; margin-bottom:32px;
+    border-radius:var(--r);
+    background:var(--glass);
+    border:1px solid var(--glass-line);
+  }
+  .ty__next li{ display:flex; gap:14px; align-items:flex-start; font-size:15.5px; }
+  .ty__step{
+    flex:0 0 26px; height:26px; margin-top:1px;
+    display:grid; place-items:center;
+    border-radius:50%;
+    background:rgba(232,197,126,.14); border:1px solid rgba(232,197,126,.34);
+    color:var(--gold); font-size:13px; font-weight:700;
+  }
+
+  .ty__actions{ display:flex; flex-wrap:wrap; gap:12px; justify-content:center; margin-bottom:28px; }
+
+  .ty__back{
+    display:inline-block;
+    color:var(--muted); font-size:14.5px;
+    text-decoration:none; border-bottom:1px solid rgba(166,190,178,.35);
+    padding-bottom:2px;
+  }
+  .ty__back:hover{ color:var(--gold); border-bottom-color:var(--gold); }
+
+  @media (max-width:560px){
+    .ty__next{ padding:22px 20px; }
+    .ty__actions .btn{ width:100%; }
+  }
+</style>
+</head>
+<body>
+
+<main class="ty">
+  <a class="ty__logo" href="index.html">Lumiér</a>
+
+  <div class="ty__mark" aria-hidden="true">
+    <svg width="38" height="38" viewBox="0 0 38 38" fill="none">
+      <path d="M8 19.5 L15.5 27 L30 11" stroke="#E8C57E" stroke-width="3"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+  </div>
+
+  <h1 class="ty__title">Заявка принята</h1>
+
+  <p class="ty__lead">
+    Спасибо! Дизайнер перезвонит в&nbsp;течение <b>15&nbsp;минут</b> с&nbsp;9:00 до&nbsp;21:00.
+    Если вы&nbsp;оставили заявку ночью — наберём утром.
+  </p>
+
+  <ul class="ty__next">
+    <li><span class="ty__step">1</span><span>Уточним по&nbsp;телефону метраж, этажность и&nbsp;удобное время выезда.</span></li>
+    <li><span class="ty__step">2</span><span>Дизайнер приедет с&nbsp;образцами гирлянд — бесплатно, в&nbsp;любой день недели.</span></li>
+    <li><span class="ty__step">3</span><span>Покажем 3D-эскиз и&nbsp;точную смету <b>до</b>&nbsp;оплаты. Монтаж — за&nbsp;1&nbsp;день.</span></li>
+  </ul>
+
+  <div class="ty__actions">
+    <a href="tel:+79771344844" class="btn btn--gold">+7 (977) 134-48-44</a>
+    <a href="https://wa.me/79771344844" class="btn btn--ghost" target="_blank" rel="noopener">WhatsApp</a>
+    <a href="tg://resolve?domain=girlandahous" class="btn btn--ghost" target="_blank" rel="noopener">Telegram</a>
+  </div>
+
+  <a class="ty__back" href="index.html">Вернуться на&nbsp;сайт</a>
+</main>
+
+</body>
+</html>

@@ -52,6 +52,14 @@ var LEAD_CONFIG = {
   webhook:  ""             // напр. "https://functions.yandexcloud.net/d4e..."
 };
 
+/* Страница «Спасибо». Открывается в новой вкладке после отправки любой формы —
+   по её просмотру в Яндекс.Метрике считается цель «заявка». На самой странице
+   стоит тот же счётчик; уберёте его оттуда — цель перестанет срабатывать. */
+var THANKS_URL = "thanks.html";
+
+// id счётчика Метрики — тот же, что в <head> index.html и thanks.html
+var METRIKA_ID = 112009045;
+
 (function () {
   "use strict";
   const $  = (s, c = document) => c.querySelector(s);
@@ -405,6 +413,39 @@ var LEAD_CONFIG = {
     });
   }
 
+  /* ---------- страница «Спасибо» ----------
+     Открываем её в новой вкладке: исходная остаётся на месте, и запросы из
+     sendLead не обрываются — навигация в текущей вкладке отменила бы
+     незавершённые fetch, и заявка могла бы не уйти.
+
+     ВАЖНО: вызывать строго СИНХРОННО из обработчика submit. Если отложить
+     вызов (в setTimeout или .then), браузер перестанет считать окно
+     следствием действия пользователя и заблокирует его как всплывающее. */
+  function openThanks(sending) {
+    // цель-событие дублирует цель по просмотру страницы: если вкладку всё же
+    // заблокировали, заявка не пропадёт из отчётов Метрики
+    try {
+      if (typeof window.ym === "function") window.ym(METRIKA_ID, "reachGoal", "lead");
+    } catch (e) {}
+
+    const url = window.THANKS_URL || "thanks.html";
+    let tab = null;
+    // третий аргумент («noopener») не передаём: с ним window.open по
+    // спецификации возвращает null, и мы бы каждый раз думали, что заблокировано
+    try {
+      tab = window.open(url, "_blank");
+    } catch (e) {}
+    if (tab) return;
+
+    // вкладку не дали — уходим на страницу в текущей, но только после того,
+    // как отправка завершится, иначе оборвём её на полпути
+    Promise.resolve(sending)
+      .catch(() => {})
+      .then(() => {
+        location.href = url;
+      });
+  }
+
   /* ---------- общие формы (попап + блок «Оставить заявку») ---------- */
   function handleLead(form, source) {
     form.addEventListener("submit", (e) => {
@@ -420,7 +461,7 @@ var LEAD_CONFIG = {
         agree.closest(".agree").classList.add("is-error");
         return;
       }
-      sendLead(collectLead(form, source));
+      openThanks(sendLead(collectLead(form, source)));
       form.reset();
       if (!modal.hidden) closeModal();
       showToast();
@@ -512,10 +553,12 @@ var LEAD_CONFIG = {
         agree.closest(".agree").classList.add("is-error");
         return;
       }
-      sendLead(
-        collectLead(quiz.form, "Квиз-калькулятор", {
-          estimate: quiz.sum ? quiz.sum.textContent : "",
-        })
+      openThanks(
+        sendLead(
+          collectLead(quiz.form, "Квиз-калькулятор", {
+            estimate: quiz.sum ? quiz.sum.textContent : "",
+          })
+        )
       );
       showToast();
       quiz.form.reset();

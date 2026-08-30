@@ -502,12 +502,6 @@ button{ font-family:inherit; cursor:pointer; border:none; background:none; color
 .post img{ width:100%; height:100%; object-fit:cover; background:linear-gradient(160deg,#13503d,#0a2a20); transition:transform .5s; }
 .post:hover img{ transform:scale(1.08); }
 .post__heart{ position:absolute; left:10px; bottom:9px; font-size:12.5px; font-weight:700; color:#fff; text-shadow:0 1px 6px rgba(0,0,0,.6); }
-.social__cta{ margin-top:34px; display:flex; align-items:center; justify-content:space-between; gap:24px; flex-wrap:wrap; padding:24px 30px; border-radius:var(--r); background:#fff; border:1px solid var(--line-d); box-shadow:var(--shadow-sm); }
-.social__cta p{ font-size:16.5px; } .social__cta b{ color:var(--emerald-3); }
-.social__links{ display:flex; gap:10px; }
-.social__links .msg{ color:var(--ink); border-color:var(--btn-line-d); }
-.social__links .msg:hover{ border-color:var(--gold-2); color:var(--emerald-3); background:rgba(212,175,97,.08); }
-.social__note{ margin-top:16px; font-size:12px; color:var(--muted-d); }
 
 /* =================== TEAM =================== */
 .team{ background:var(--cream-bg); color:var(--ink); }
@@ -775,8 +769,6 @@ html.js .reveal.is-in{ opacity:1; transform:none; }
   .ba__pair{ grid-template-columns:1fr; }
   .safety__banner figcaption{ background:linear-gradient(180deg, rgba(6,18,14,.5), rgba(6,18,14,.92)); padding:0 24px; }
   .b2b__stats{ grid-template-columns:1fr 1fr; }
-  .social__cta{ flex-direction:column; align-items:flex-start; }
-  .social__links{ flex-wrap:wrap; }
   .svc--wide{ grid-column:span 1; }
   .footer__inner{ grid-template-columns:1fr; }
   .hero__actions .btn,.pains__solve .btn{ width:100%; }
