@@ -127,8 +127,16 @@ function forwardLeads() {
     var threads = GmailApp.search(query, 0, 50);
     var pending = [];
 
+    var own = ownAddresses(forwardTo);
+    var skipped = 0;
+
     threads.forEach(function (thread) {
       thread.getMessages().forEach(function (m) {
+        // САМОЕ ВАЖНОЕ МЕСТО ВО ВСЁМ ФАЙЛЕ, см. комментарий у isLead
+        if (!isLead(m, own)) {
+          skipped++;
+          return;
+        }
         var id = m.getId();
         var needTg = seenTg.indexOf(id) === -1;
         var needMail = !!forwardTo && seenMail.indexOf(id) === -1;
@@ -138,10 +146,13 @@ function forwardLeads() {
       });
     });
 
-    // видно в «Выполнениях»: нашлось ли что-то вообще и сколько кому осталось
+    // видно в «Выполнениях»: нашлось ли что-то вообще и сколько кому осталось.
+    // «пропущено не-заявок» — это наши же пересылки и ответы получателей,
+    // попавшие в ту же цепочку. Число заметно больше нуля — норма.
     Logger.log(
       "Запрос: " + query +
       " → цепочек: " + threads.length +
+      ", пропущено не-заявок: " + skipped +
       ", в Telegram: " + pending.filter(function (p) { return p.needTg; }).length +
       ", на почту: " + pending.filter(function (p) { return p.needMail; }).length
     );
@@ -365,6 +376,78 @@ function migratedChatId(body) {
   }
 }
 
+/* ── что считать заявкой ───────────────────────────────────────────────────
+   ЭТО ЗАЩИТА ОТ ЛАВИНЫ ДУБЛЕЙ. Читать перед любой правкой поиска и пересылки.
+
+   Пересланное нами письмо сохраняет тему оригинала (так задумано: иначе Gmail
+   подставит «Fwd:»). Значит оно само подходит под наш же поисковый запрос
+   subject:"Заявка с сайта" и ложится в ту же цепочку. Без фильтра следующий
+   проход считает его новой заявкой: отправляет в чат ещё раз и пересылает
+   снова — а это порождает очередное письмо. Каждую минуту количество
+   удваивается. Ровно так и появилась лавина одинаковых заявок в группе.
+
+   Поэтому берём только письма, которые пришли ИЗВНЕ: не от нас самих и не от
+   тех, кому мы пересылаем. Заодно отсекаются ответы получателей, попавшие
+   в ту же цепочку, — они тоже не заявки.
+
+   Фильтр намеренно сделан «от противного», через список своих адресов, а не
+   «только от formsubmit.co»: сменится отправитель у сервиса форм — заявки
+   продолжат ходить, а не пропадут молча. */
+function ownAddresses(forwardTo) {
+  var list = [];
+
+  // свой адрес. В триггерах Session иногда ведёт себя непредсказуемо, поэтому
+  // не падаем, а лишь пишем в журнал: подстраховкой служит подпись отправителя,
+  // см. isLead
+  try {
+    [Session.getEffectiveUser(), Session.getActiveUser()].forEach(function (u) {
+      var mail = u && u.getEmail && u.getEmail();
+      if (mail) list.push(mail.toLowerCase());
+    });
+  } catch (e) {
+    Logger.log("Не удалось определить свой адрес: " + e);
+  }
+
+  // и те, кому пересылаем: их ответы падают в ту же цепочку и заявками не являются
+  (forwardTo || "").split(",").forEach(function (a) {
+    a = a.trim().toLowerCase();
+    if (a) list.push(a);
+  });
+
+  return list;
+}
+
+function isLead(msg, own) {
+  var from;
+  try {
+    from = (msg.getFrom() || "").toLowerCase();
+  } catch (e) {
+    from = "";
+  }
+
+  /* Отправителя определить не удалось — считаем, что это НЕ заявка.
+     Сторона выбрана осознанно. Ошибись мы в другую сторону, и вернётся лавина:
+     она растёт сама, заливает чат и жжёт почтовую квоту. Здесь же худший исход —
+     заявка задержится в ящике, никуда не пропав, а причина будет в журнале. */
+  if (!from) {
+    Logger.log("Пропущено: не удалось определить отправителя письма.");
+    return false;
+  }
+
+  /* Признак номер один, не зависящий ни от чего внешнего: свои пересылки мы
+     подписываем FORWARD_FROM_NAME, и это имя видно в поле «От». Даже если
+     список своих адресов окажется пустым, круг всё равно не замкнётся. */
+  var mark = (FORWARD_FROM_NAME || "").toLowerCase();
+  if (mark && from.indexOf(mark) !== -1) return false;
+
+  // признак номер два: письмо от нас самих или от получателей пересылки
+  for (var i = 0; i < own.length; i++) {
+    if (own[i] && from.indexOf(own[i]) !== -1) return false;
+  }
+
+  return true;
+}
+
 /* ── пересылка письмом ─────────────────────────────────────────────────────
    Пересылаем исходное письмо как есть: клиент получает ту же таблицу с полями,
    какую сформировал FormSubmit. Тема сохраняется — иначе Gmail подставил бы
@@ -439,27 +522,50 @@ function resetSeen() {
 // суток, в том числе тестовые. После неё на почту уйдут только новые.
 // На Telegram не влияет — там своя память.
 function skipMailBacklog() {
-  var props = PropertiesService.getScriptProperties();
-  var seen = readSeen(props, SEEN_MAIL);
-  var threads = GmailApp.search(
-    'subject:"' + SUBJECT + '" newer_than:' + LOOKBACK_DAYS + "d", 0, 50
-  );
-
-  var n = 0;
-  threads.forEach(function (thread) {
-    thread.getMessages().forEach(function (m) {
-      if (seen.indexOf(m.getId()) === -1) {
-        seen.push(m.getId());
-        n++;
-      }
-    });
-  });
-
-  writeSeen(props, SEEN_MAIL, seen);
+  var n = markSeen([SEEN_MAIL]);
   Logger.log(
     "Помечено как уже пересланное, без отправки: " + n +
     " писем. На почту клиента уйдут только новые заявки."
   );
+}
+
+/* АВАРИЙНЫЙ СТОП. Помечает всё в окне LOOKBACK_DAYS как отправленное СРАЗУ ПО
+   ОБОИМ каналам, ничего не отправляя. Нужен, если в чат уже насыпалось лишнего
+   и надо оборвать это одним движением, начав с чистого листа.
+
+   После него ни одна из накопившихся заявок в чат и на почту не пойдёт —
+   только те, что придут дальше. */
+function skipAllBacklog() {
+  var n = markSeen([SEEN_TG, SEEN_MAIL]);
+  Logger.log(
+    "Аварийный стоп: помечено как отправленное по обоим каналам " + n +
+    " писем, без единой отправки. Дальше пойдут только новые заявки."
+  );
+}
+
+// общая часть обеих команд: пробегает окно поиска и метит письма в указанных
+// списках, ничего не отправляя
+function markSeen(keys) {
+  var props = PropertiesService.getScriptProperties();
+  var threads = GmailApp.search(
+    'subject:"' + SUBJECT + '" newer_than:' + LOOKBACK_DAYS + "d", 0, 50
+  );
+
+  var total = 0;
+  keys.forEach(function (key) {
+    var seen = readSeen(props, key);
+    threads.forEach(function (thread) {
+      thread.getMessages().forEach(function (m) {
+        if (seen.indexOf(m.getId()) === -1) {
+          seen.push(m.getId());
+          total++;
+        }
+      });
+    });
+    writeSeen(props, key, seen);
+  });
+
+  return total;
 }
 
 // Проверка пересылки: шлёт на адреса из FORWARD_TO последнюю найденную заявку.
