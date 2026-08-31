@@ -389,6 +389,35 @@ function resetSeen() {
   Logger.log("Память обработанных писем очищена — оба канала.");
 }
 
+// Разовая команда на момент включения пересылки.
+// Помечает все письма в окне LOOKBACK_DAYS как уже пересланные, НИЧЕГО не
+// отправляя. Без неё при первом запуске клиенту разом улетят заявки за двое
+// суток, в том числе тестовые. После неё на почту уйдут только новые.
+// На Telegram не влияет — там своя память.
+function skipMailBacklog() {
+  var props = PropertiesService.getScriptProperties();
+  var seen = readSeen(props, SEEN_MAIL);
+  var threads = GmailApp.search(
+    'subject:"' + SUBJECT + '" newer_than:' + LOOKBACK_DAYS + "d", 0, 50
+  );
+
+  var n = 0;
+  threads.forEach(function (thread) {
+    thread.getMessages().forEach(function (m) {
+      if (seen.indexOf(m.getId()) === -1) {
+        seen.push(m.getId());
+        n++;
+      }
+    });
+  });
+
+  writeSeen(props, SEEN_MAIL, seen);
+  Logger.log(
+    "Помечено как уже пересланное, без отправки: " + n +
+    " писем. На почту клиента уйдут только новые заявки."
+  );
+}
+
 // Проверка пересылки: шлёт на адреса из FORWARD_TO последнюю найденную заявку.
 // Ничего не помечает, на автоматическую работу не влияет.
 function testForward() {
