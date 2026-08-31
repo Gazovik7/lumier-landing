@@ -7,12 +7,16 @@
  * а сообщение в группу не приходило. Письма при этом доходили всегда.
  *
  * ЧТО ДЕЛАЕТ ЭТОТ СКРИПТ. Раз в минуту смотрит почтовый ящик, находит новые
- * письма FormSubmit с заявками и сам отправляет их в группу. Работает на
- * серверах Google, от сети посетителя не зависит вообще: если письмо пришло —
- * заявка попадёт в Telegram.
+ * письма FormSubmit с заявками и рассылает их по двум каналам:
  *
- * Потерять заявку скрипт не может и в обратную сторону: если Telegram не
- * ответил, письмо НЕ помечается обработанным и уедет на следующем запуске.
+ *   1) в группу заявок Telegram — на серверах Google, от сети посетителя это
+ *      не зависит вообще: если письмо пришло, заявка попадёт в чат;
+ *   2) письмом на боевой ящик клиента (FORWARD_TO) — он не подтверждён
+ *      в FormSubmit и напрямую заявок не получает, подробности у FORWARD_TO.
+ *
+ * Потерять заявку скрипт не может: канал, который не сработал, не помечает
+ * письмо обработанным, и оно уедет на следующем запуске. Каналы помнят
+ * отправленное порознь, поэтому сбой одного не плодит дубли в другом.
  *
  * ЖИВОЙ СКРИПТ (аккаунт gazovik7@gmail.com, под другим не откроется):
  * https://script.google.com/home/projects/18lHbAjeyfarh1w0WP2YBXAEPVWjNgU5c_uZGRzl9Mu3RnCLKikiSk3e7/edit
@@ -41,6 +45,30 @@ var LABEL = "tg-sent";
 // Не поднимать сильно: Google даёт 9 КБ на одно свойство, а id письма ~19 байт.
 // 300 штук с запасом перекрывают LOOKBACK_DAYS — больше и не нужно.
 var SEEN_LIMIT = 300;
+
+/* Куда дублировать заявку письмом.
+   -------------------------------------------------------------------
+   Боевой ящик клиента girlandahous@yandex.ru не подтверждён в FormSubmit,
+   и писем оттуда не получает. Подтвердить его нельзя: и «Activate Form»
+   у FormSubmit, и штатная пересылка в настройках Gmail требуют кода,
+   который приходит НА САМ ЭТОТ ЯЩИК, а доступа к нему нет.
+
+   Отправка письма из Apps Script подтверждения получателя не требует —
+   поэтому пересылаем сами, отсюда.
+
+   Несколько адресов — через запятую. Пусто — пересылка выключена.
+   Значение можно переопределить свойством скрипта FORWARD_TO, тогда
+   менять получателей получится без правки кода. */
+var FORWARD_TO = "girlandahous@yandex.ru";
+
+// имя отправителя, каким письмо видно в ящике получателя
+var FORWARD_FROM_NAME = "Заявки с сайта Lumiér";
+
+/* Каналы помнят обработанные письма ОТДЕЛЬНО друг от друга. Иначе сбой одного
+   тянул бы за собой повтор другого: не ответил Telegram — и клиенту повторно
+   ушло бы то же письмо. */
+var SEEN_TG = "SEEN_IDS";
+var SEEN_MAIL = "SEEN_MAIL_IDS";
 
 // подписи полей в том порядке, в каком они идут в js/main.js (FIELD_LABELS).
 // По ним же отсеиваются мусорные строки: письмо FormSubmit свёрстано вложенными
@@ -71,7 +99,10 @@ function forwardLeads() {
   if (!lock.tryLock(20000)) return;
 
   try {
-    var seen = readSeen(props);
+    var seenTg = readSeen(props, SEEN_TG);
+    var seenMail = readSeen(props, SEEN_MAIL);
+    var forwardTo = (props.getProperty("FORWARD_TO") || FORWARD_TO || "").trim();
+
     var label = getLabel();
     var query = 'subject:"' + SUBJECT + '" newer_than:' + LOOKBACK_DAYS + "d";
     var threads = GmailApp.search(query, 0, 50);
@@ -79,13 +110,21 @@ function forwardLeads() {
 
     threads.forEach(function (thread) {
       thread.getMessages().forEach(function (m) {
-        if (seen.indexOf(m.getId()) === -1) pending.push({ msg: m, thread: thread });
+        var id = m.getId();
+        var needTg = seenTg.indexOf(id) === -1;
+        var needMail = !!forwardTo && seenMail.indexOf(id) === -1;
+        if (needTg || needMail) {
+          pending.push({ msg: m, thread: thread, needTg: needTg, needMail: needMail });
+        }
       });
     });
 
-    // видно в «Выполнениях»: нашлось ли что-то вообще и сколько новых
+    // видно в «Выполнениях»: нашлось ли что-то вообще и сколько кому осталось
     Logger.log(
-      "Запрос: " + query + " → цепочек: " + threads.length + ", новых писем: " + pending.length
+      "Запрос: " + query +
+      " → цепочек: " + threads.length +
+      ", в Telegram: " + pending.filter(function (p) { return p.needTg; }).length +
+      ", на почту: " + pending.filter(function (p) { return p.needMail; }).length
     );
 
     // старые письма первыми — в чате заявки лягут в том порядке, в каком приходили
@@ -95,6 +134,14 @@ function forwardLeads() {
 
     for (var i = 0; i < pending.length; i++) {
       var entry = pending[i];
+      var id = entry.msg.getId();
+
+      // ---- дубль письмом на ящик клиента ----
+      if (entry.needMail && forwardEmail(entry.msg, forwardTo)) seenMail.push(id);
+
+      // ---- сообщение в группу ----
+      if (!entry.needTg) continue;
+
       var res = sendTelegram(token, chatId, buildMessage(entry.msg));
       // группу могли превратить в супергруппу — дальше шлём уже по новому id
       if (res.chatId) chatId = res.chatId;
@@ -107,12 +154,13 @@ function forwardLeads() {
         continue;
       }
 
-      seen.push(entry.msg.getId());
+      seenTg.push(id);
       entry.thread.addLabel(label);
       Utilities.sleep(400); // Bot API не любит очередь быстрее ~20 сообщений в минуту
     }
 
-    writeSeen(props, seen);
+    writeSeen(props, SEEN_TG, seenTg);
+    writeSeen(props, SEEN_MAIL, seenMail);
   } finally {
     lock.releaseLock();
   }
@@ -273,19 +321,36 @@ function migratedChatId(body) {
   }
 }
 
-/* ── память об обработанных письмах ────────────────────────────────────────*/
-function readSeen(props) {
+/* ── пересылка письмом ─────────────────────────────────────────────────────
+   Пересылаем исходное письмо как есть: клиент получает ту же таблицу с полями,
+   какую сформировал FormSubmit. Тема сохраняется — иначе Gmail подставил бы
+   «Fwd:» и письма хуже искались бы по теме. */
+function forwardEmail(msg, to) {
   try {
-    var raw = props.getProperty("SEEN_IDS");
+    msg.forward(to, { subject: msg.getSubject(), name: FORWARD_FROM_NAME });
+    return true;
+  } catch (e) {
+    // обычно это исчерпанная суточная квота Gmail (у бесплатного аккаунта
+    // 100 получателей в сутки). Письмо не помечаем — уедет на следующем запуске
+    // или завтра, когда квота обновится.
+    Logger.log("Не переслано на " + to + ": " + e);
+    return false;
+  }
+}
+
+/* ── память об обработанных письмах ────────────────────────────────────────*/
+function readSeen(props, key) {
+  try {
+    var raw = props.getProperty(key);
     return raw ? JSON.parse(raw) : [];
   } catch (e) {
     return [];
   }
 }
 
-function writeSeen(props, seen) {
+function writeSeen(props, key, seen) {
   if (seen.length > SEEN_LIMIT) seen = seen.slice(seen.length - SEEN_LIMIT);
-  props.setProperty("SEEN_IDS", JSON.stringify(seen));
+  props.setProperty(key, JSON.stringify(seen));
 }
 
 function getLabel() {
@@ -315,8 +380,35 @@ function installTrigger() {
 }
 
 // Аварийный сброс памяти: после него скрипт заново разошлёт письма за
-// последние LOOKBACK_DAYS дней. Нужен, только если заявки надо продублировать.
+// последние LOOKBACK_DAYS дней — и в группу, и на почту клиента.
+// Нужен, только если заявки надо продублировать.
 function resetSeen() {
-  PropertiesService.getScriptProperties().deleteProperty("SEEN_IDS");
-  Logger.log("Память обработанных писем очищена.");
+  var props = PropertiesService.getScriptProperties();
+  props.deleteProperty(SEEN_TG);
+  props.deleteProperty(SEEN_MAIL);
+  Logger.log("Память обработанных писем очищена — оба канала.");
+}
+
+// Проверка пересылки: шлёт на адреса из FORWARD_TO последнюю найденную заявку.
+// Ничего не помечает, на автоматическую работу не влияет.
+function testForward() {
+  var props = PropertiesService.getScriptProperties();
+  var to = (props.getProperty("FORWARD_TO") || FORWARD_TO || "").trim();
+  if (!to) {
+    Logger.log("FORWARD_TO пуст — пересылка выключена.");
+    return;
+  }
+
+  var threads = GmailApp.search('subject:"' + SUBJECT + '" newer_than:30d', 0, 1);
+  if (!threads.length) {
+    Logger.log("Писем с заявками за 30 дней не нашлось — нечего пересылать.");
+    return;
+  }
+
+  var msgs = threads[0].getMessages();
+  var ok = forwardEmail(msgs[msgs.length - 1], to);
+  Logger.log(
+    (ok ? "Переслано на " : "НЕ переслано на ") + to +
+    ". Остаток суточной квоты писем: " + MailApp.getRemainingDailyQuota()
+  );
 }
