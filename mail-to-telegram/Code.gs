@@ -96,6 +96,8 @@ function forwardLeads() {
     for (var i = 0; i < pending.length; i++) {
       var entry = pending[i];
       var res = sendTelegram(token, chatId, buildMessage(entry.msg));
+      // группу могли превратить в супергруппу — дальше шлём уже по новому id
+      if (res.chatId) chatId = res.chatId;
 
       if (!res.ok) {
         // Telegram не принял. Письмо не помечаем — уедет на следующем запуске.
@@ -220,8 +222,32 @@ function cleanPlain(text) {
   return cut.replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/* ── Telegram ──────────────────────────────────────────────────────────────*/
+/* ── Telegram ──────────────────────────────────────────────────────────────
+   Отдельная история — превращение группы в супергруппу. Telegram делает это
+   сам (при смене настроек, назначении админа, росте числа участников) и
+   выдаёт чату НОВЫЙ id, а старый навсегда перестаёт принимать сообщения:
+   в ответ приходит 400 «group chat was upgraded to a supergroup chat» и новый
+   id в parameters.migrate_to_chat_id. Один раз это уже случилось и оборвало
+   канал молча. Поэтому ловим такой ответ, запоминаем новый id в свойствах
+   скрипта и сразу повторяем отправку — вмешательства не требуется.
+   Возвращаем действующий chatId, чтобы вызывающий цикл переключился на него
+   и не бился в старый на каждом письме. */
 function sendTelegram(token, chatId, text) {
+  var res = postMessage(token, chatId, text);
+  if (res.ok || res.code !== 400) return res;
+
+  var moved = migratedChatId(res.body);
+  if (!moved) return res;
+
+  PropertiesService.getScriptProperties().setProperty("CHAT_ID", String(moved));
+  Logger.log("Группа стала супергруппой. Новый CHAT_ID сохранён: " + moved);
+
+  res = postMessage(token, moved, text);
+  res.chatId = moved;
+  return res;
+}
+
+function postMessage(token, chatId, text) {
   var res = UrlFetchApp.fetch("https://api.telegram.org/bot" + token + "/sendMessage", {
     method: "post",
     contentType: "application/json",
@@ -233,7 +259,18 @@ function sendTelegram(token, chatId, text) {
     }),
   });
   var code = res.getResponseCode();
-  return { ok: code === 200, code: code, body: res.getContentText() };
+  return { ok: code === 200, code: code, body: res.getContentText(), chatId: chatId };
+}
+
+// достаёт parameters.migrate_to_chat_id из ответа Telegram, если он там есть
+function migratedChatId(body) {
+  try {
+    var j = JSON.parse(body);
+    var moved = j && j.parameters && j.parameters.migrate_to_chat_id;
+    return moved ? moved : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 /* ── память об обработанных письмах ────────────────────────────────────────*/

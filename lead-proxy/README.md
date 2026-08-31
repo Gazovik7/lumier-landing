@@ -86,7 +86,7 @@ Cloudflare оставлен на случай, если сайт когда-ни
    - **Память** — `128` МБ;
    - **Переменные окружения** — добавить две:
      - `BOT_TOKEN` — токен от @BotFather,
-     - `CHAT_ID` — `-5163834689` (**минус обязателен**, см. ниже).
+     - `CHAT_ID` — `-1003992290842` (**минус обязателен**, см. ниже).
 5. **Создать версию**.
 6. Вкладка **Обзор** → включить **Публичная функция**. Без этого браузер
    получит `403`: вызов будет требовать IAM-токен.
@@ -136,7 +136,7 @@ curl -i -X POST https://functions.yandexcloud.net/d4e... \
 cd lead-proxy
 npx wrangler login          # откроет браузер, попросит войти в Cloudflare
 npx wrangler secret put BOT_TOKEN   # вставить токен от @BotFather
-npx wrangler secret put CHAT_ID     # -5163834689
+npx wrangler secret put CHAT_ID     # -1003992290842
 npx wrangler deploy
 ```
 
