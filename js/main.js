@@ -327,8 +327,31 @@ var LEAD_GOAL = "zayavka";
     when: "Сроки монтажа",
     estimate: "Расчёт на сайте",
     page: "Страница",
+    ymClientId: "ClientID Метрики",
   };
   const FIELD_ORDER = Object.keys(FIELD_LABELS);
+
+  /* ---------- ClientID Яндекс.Метрики ----------
+     Нужен, чтобы связать заявку с визитом: по нему в Метрике находится сессия
+     человека — откуда пришёл, что смотрел, сколько раз возвращался.
+
+     Метрика отдаёт его ТОЛЬКО через колбэк, синхронно взять неоткуда. Поэтому
+     спрашиваем заранее, на загрузке страницы, и держим наготове: к моменту
+     отправки формы значение уже лежит в переменной. Вызов можно делать сразу —
+     ym до загрузки счётчика копит команды в очередь и выполнит эту, когда
+     счётчик поднимется.
+
+     Если счётчик не загрузился (блокировщик, обрыв), поле просто не попадёт
+     в заявку — на отправку это никак не влияет. */
+  let ymClientId = "";
+  (function captureClientId() {
+    try {
+      if (typeof window.ym !== "function") return;
+      window.ym(METRIKA_ID, "getClientID", (id) => {
+        if (id) ymClientId = String(id);
+      });
+    } catch (e) {}
+  })();
 
   function collectLead(form, source, extra) {
     const data = { source: source };
@@ -338,6 +361,7 @@ var LEAD_GOAL = "zayavka";
     });
     Object.assign(data, extra || {});
     data.page = location.href;
+    if (ymClientId) data.ymClientId = ymClientId;
     data.ts = new Date().toISOString();
     return data;
   }

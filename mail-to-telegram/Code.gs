@@ -46,6 +46,12 @@ var LABEL = "tg-sent";
 // 300 штук с запасом перекрывают LOOKBACK_DAYS — больше и не нужно.
 var SEEN_LIMIT = 300;
 
+// сколько писем разбираем за один проход. Триггер срабатывает раз в минуту,
+// так что накопившееся всё равно разойдётся, просто не одним куском.
+// Ограничение нужно, чтобы большой завал не упёрся в лимит времени Apps Script
+// (6 минут): оборванный на середине проход — прямой источник дублей.
+var MAX_PER_RUN = 20;
+
 /* Куда дублировать заявку письмом.
    -------------------------------------------------------------------
    Ящики клиента не подтверждены в FormSubmit и напрямую заявок не получают.
@@ -95,6 +101,7 @@ var KNOWN_FIELDS = [
   "Сроки монтажа",
   "Расчёт на сайте",
   "Страница",
+  "ClientID Метрики",
 ];
 
 /* ── главная функция: её и вешаем на триггер ─────────────────────────────── */
@@ -144,35 +151,60 @@ function forwardLeads() {
       return a.msg.getDate().getTime() - b.msg.getDate().getTime();
     });
 
-    for (var i = 0; i < pending.length; i++) {
+    /* Отметку «отправлено» пишем СРАЗУ после каждой удачной отправки, а не
+       одним разом в конце. Это защита от главной причины дублей: стоило любому
+       вызову в цикле бросить исключение или запуску упереться в лимит времени
+       Apps Script — и отметки не сохранялись вовсе, а через минуту весь
+       разобранный кусок уходил в чат заново. И так каждую минуту.
+
+       Тем же занят и try внутри цикла: одно кривое письмо не должно ронять
+       весь проход и заставлять переотправлять остальные. */
+    var sentTg = 0;
+    var sentMail = 0;
+
+    for (var i = 0; i < pending.length && i < MAX_PER_RUN; i++) {
       var entry = pending[i];
       var id = entry.msg.getId();
 
-      // ---- дубль письмом на ящик клиента ----
-      if (entry.needMail && forwardEmail(entry.msg, forwardTo)) seenMail.push(id);
+      try {
+        // ---- дубль письмом на ящики клиента ----
+        if (entry.needMail && forwardEmail(entry.msg, forwardTo)) {
+          seenMail.push(id);
+          writeSeen(props, SEEN_MAIL, seenMail);
+          sentMail++;
+        }
 
-      // ---- сообщение в группу ----
-      if (!entry.needTg) continue;
+        // ---- сообщение в группу ----
+        if (!entry.needTg) continue;
 
-      var res = sendTelegram(token, chatId, buildMessage(entry.msg));
-      // группу могли превратить в супергруппу — дальше шлём уже по новому id
-      if (res.chatId) chatId = res.chatId;
+        var res = sendTelegram(token, chatId, buildMessage(entry.msg));
+        // группу могли превратить в супергруппу — дальше шлём уже по новому id
+        if (res.chatId) chatId = res.chatId;
 
-      if (!res.ok) {
-        // Telegram не принял. Письмо не помечаем — уедет на следующем запуске.
-        // 429 (слишком часто) значит, что и остальные не пройдут: выходим.
-        Logger.log("Не отправлено (" + res.code + "): " + res.body);
-        if (res.code === 429) break;
-        continue;
+        if (!res.ok) {
+          // Telegram не принял. Письмо не помечаем — уедет на следующем запуске.
+          // 429 (слишком часто) значит, что и остальные не пройдут: выходим.
+          Logger.log("Не отправлено (" + res.code + "): " + res.body);
+          if (res.code === 429) break;
+          continue;
+        }
+
+        seenTg.push(id);
+        writeSeen(props, SEEN_TG, seenTg);
+        sentTg++;
+
+        // ярлык — вещь косметическая, и ставится он ПОСЛЕ отметки: упрётся
+        // Gmail в свой лимит на запись — заявка всё равно останется отправленной
+        // и повторно не уйдёт
+        entry.thread.addLabel(label);
+
+        Utilities.sleep(400); // Bot API не любит очередь быстрее ~20 сообщений в минуту
+      } catch (e) {
+        Logger.log("Письмо " + id + " пропущено из-за ошибки: " + e);
       }
-
-      seenTg.push(id);
-      entry.thread.addLabel(label);
-      Utilities.sleep(400); // Bot API не любит очередь быстрее ~20 сообщений в минуту
     }
 
-    writeSeen(props, SEEN_TG, seenTg);
-    writeSeen(props, SEEN_MAIL, seenMail);
+    Logger.log("Отправлено за проход — в Telegram: " + sentTg + ", письмом: " + sentMail);
   } finally {
     lock.releaseLock();
   }
