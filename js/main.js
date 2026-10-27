@@ -54,7 +54,15 @@ var LEAD_CONFIG = {
   // Прокси: держит токен бота у себя и сам пишет в группу заявок
   // «New site (заявки) | Вешаем-гирлянды.рф». Развернуть и вставить сюда
   // выданный URL — инструкция в lead-proxy/README.md.
-  webhook:  ""             // напр. "https://functions.yandexcloud.net/d4e..."
+  webhook:  "",            // напр. "https://functions.yandexcloud.net/d4e..."
+  // 4) CRM — микро-CRM сквозной аналитики (clients.smirnov.marketing, экран «Заявки»).
+  //    ДОПОЛНИТЕЛЬНЫЙ канал: почта и Telegram работают как раньше, а заявка заодно попадает
+  //    в CRM, где менеджер ставит статусы, а аналитика обновляется сама.
+  //    endpoint — адрес приёма из настроек проекта (вкладка «CRM» → «Приём заявок»), вида
+  //    https://clients.smirnov.marketing/api/lead/<проект>/<токен>?site=<сайт>
+  //    Пусто — канал пропускается. Адрес не даёт читать данные, только добавлять заявки;
+  //    если им начнут спамить — перевыпустить в панели и заменить здесь.
+  crm: { endpoint: "https://clients.smirnov.marketing/api/lead/veshaem-girlyandy-rf/4a4552026db9fbbe7c29d5d485fd691a?site=veshaem-girlyandi" }
 };
 
 /* Страница «Спасибо». Открывается в новой вкладке после отправки любой формы —
@@ -434,11 +442,42 @@ var LEAD_GOAL = "zayavka";
     });
   }
 
+  // Микро-CRM: имя, телефон, форма, страница и ClientID — отдельными полями, всё остальное — ответами с подписями.
+  // Content-Type text/plain — «простой» запрос без предварительного OPTIONS; keepalive доводит запрос,
+  // даже если вкладку закроют или уйдут со страницы. Любой сбой этого канала остальные не затрагивает.
+  function sendCrm(data) {
+    const url = (CFG.crm || {}).endpoint;
+    if (!url) return null;
+    try {
+      const skip = { source: 1, name: 1, phone: 1, page: 1, ymClientId: 1, ts: 1 };
+      const answers = {};
+      Object.keys(data).forEach((k) => {
+        if (!skip[k] && data[k]) answers[FIELD_LABELS[k] || k] = data[k];
+      });
+      return fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "text/plain;charset=UTF-8" },
+        keepalive: true,
+        body: JSON.stringify({
+          name: data.name || "",
+          phone: data.phone || "",
+          form: data.source || "",
+          page: data.page || "",
+          cid: data.ymClientId || "",
+          answers: answers,
+        }),
+      });
+    } catch (e) {
+      console.error("CRM: заявка не отправлена", e);
+      return null;
+    }
+  }
+
   // Отправляем во все настроенные каналы разом. Пользователю показываем успех
   // сразу — заявка не должна «зависать» из-за медленного стороннего сервиса,
   // а ошибки пишем в консоль, чтобы их было видно при отладке.
   function sendLead(data) {
-    const jobs = [...sendEmail(data), sendTelegram(data), sendWebhook(data)].filter(Boolean);
+    const jobs = [...sendEmail(data), sendTelegram(data), sendWebhook(data), sendCrm(data)].filter(Boolean);
     if (!jobs.length) {
       console.warn("LEAD (каналы отправки не настроены, см. LEAD_CONFIG в js/main.js):", data);
       return Promise.resolve();
